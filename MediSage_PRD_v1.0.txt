@@ -1,0 +1,279 @@
+MediSage
+Smart Prescription Analyzer
+Product Requirements Document  |  v1.0
+
+Document Version	1.0 – Initial Draft
+Date	March 2026
+Status	Draft – Under Review
+Audience	Engineering, Product, Design, QA Teams
+Classification	Confidential – Internal Use Only
+
+Table of Contents
+
+
+
+1. Executive Summary
+
+MediSage is an AI-powered full-stack web application that digitizes and analyzes medical prescriptions, helping patients understand their medications and discover more affordable generic alternatives. By combining OCR, NLP, and AI insights, MediSage addresses a critical gap in healthcare accessibility — particularly for patients who struggle with handwritten prescriptions or are unaware of cheaper equivalent medicines.
+
+This PRD defines the complete product requirements for MediSage v1.0, covering functional features, system architecture, non-functional requirements, technical stack, success metrics, and constraints.
+
+2. Problem Statement
+
+2.1 Background
+India’s pharmaceutical market is the third largest by volume globally, yet prescription affordability and literacy remain major challenges. Patients routinely encounter:
+•Illegible handwritten prescriptions from doctors
+•Lack of awareness about generic alternatives that can cost 60–80% less than branded drugs
+•No easy mechanism to compare medicine prices across pharmacies
+•Difficulty understanding what a prescribed medicine is for
+
+2.2 Target Users
+User Segment	Pain Point	Frequency
+General patients	Cannot read prescriptions; unaware of generics	Every doctor visit
+Senior citizens	Complex multi-medicine prescriptions	Frequent (chronic conditions)
+Low-income households	Cost sensitivity; need cheapest option	Every purchase
+Caregivers	Managing medicines for dependents	Daily
+
+3. Product Goals & Objectives
+
+3.1 Primary Goals
+•Automate extraction of medicine information from uploaded prescriptions (images and PDFs)
+•Map extracted branded medicines to their generic equivalents with price comparison
+•Provide AI-generated usage insights for identified medicines
+•Deliver a secure, user-friendly web interface accessible on desktop and mobile
+
+3.2 Success Metrics (v1.0)
+Metric	Target	Measurement Method
+OCR accuracy (printed prescriptions)	≥ 90%	Internal test dataset (n=200)
+Medicine identification precision	≥ 85%	Labeled benchmark set
+Generic match recall	≥ 80%	Dataset coverage analysis
+API response time (P95)	< 5 seconds	APM monitoring
+User task completion rate	≥ 75%	UI analytics / session tracking
+
+4. Scope
+
+4.1 In Scope (v1.0)
+•Prescription upload (JPG, PNG, PDF — max 10 MB)
+•OCR-based text extraction with image preprocessing
+•NLP-driven medicine name identification and cleaning
+•Generic medicine mapping with fuzzy matching
+•Branded vs. generic price comparison table
+•AI-generated medicine usage summaries (with disclaimer)
+•User authentication (JWT-based login / signup)
+•Responsive web frontend (desktop + mobile)
+•Async job processing for OCR tasks
+
+4.2 Out of Scope (v1.0)
+•Mobile native application (iOS / Android)
+•Real-time pharmacy inventory integration
+•Drug interaction warnings
+•Doctor recommendation system
+•Telemedicine or prescription issuance
+•Deep learning-based handwriting recognition (planned v2.0)
+
+5. Functional Requirements
+
+5.1 User Authentication
+ID	Requirement	Priority
+FR-A1	Users shall register with email and password	Must Have
+FR-A2	System shall issue JWT tokens on login; tokens expire after 24 hours	Must Have
+FR-A3	Passwords shall be hashed with bcrypt (min cost 12)	Must Have
+FR-A4	System shall support Google OAuth 2.0 login as an alternative	Should Have
+
+5.2 Prescription Upload
+ID	Requirement	Priority
+FR-U1	Users shall upload prescription files (JPG, PNG, PDF; max 10 MB)	Must Have
+FR-U2	UI shall support drag-and-drop and file-picker upload methods	Must Have
+FR-U3	System shall validate file type and size before upload; reject invalid files with a descriptive error message	Must Have
+FR-U4	Uploaded files shall be stored in object storage (S3/Cloudinary); raw files deleted after 24 hours	Must Have
+FR-U5	System shall show real-time upload progress to the user	Should Have
+
+5.3 OCR & Image Preprocessing
+ID	Requirement	Priority
+FR-O1	System shall preprocess images: resize, grayscale conversion, adaptive thresholding, deskewing, and noise removal	Must Have
+FR-O2	System shall use EasyOCR for handwritten / low-quality images and Tesseract for clean printed prescriptions, selected by a quality classifier	Must Have
+FR-O3	OCR shall return a confidence score per text block; blocks below 60% confidence shall be flagged for review	Must Have
+FR-O4	OCR processing shall be executed asynchronously via Celery task queue; frontend shall display a processing indicator	Must Have
+
+5.4 Medicine Name Identification
+ID	Requirement	Priority
+FR-M1	System shall apply spaCy NER + regex patterns to extract candidate medicine names from OCR output	Must Have
+FR-M2	Candidate names shall be verified against an internal medicine dictionary using exact and fuzzy matching (RapidFuzz; threshold ≥ 80)	Must Have
+FR-M3	System shall handle common OCR noise (extra spaces, punctuation, case variations) before matching	Must Have
+FR-M4	Unmatched names shall be surfaced to the user with a “Could not identify” label and an OpenFDA API fallback attempt	Should Have
+
+5.5 Generic Medicine Recommendation
+ID	Requirement	Priority
+FR-G1	System shall map each identified branded medicine to one or more generic equivalents using the A–Z Medicine of India dataset	Must Have
+FR-G2	Mapping shall include: generic name, active ingredient(s), manufacturer, and availability flag	Must Have
+FR-G3	If no generic is found in the dataset, system shall attempt OpenFDA API; if still not found, display “No generic on record”	Must Have
+
+5.6 Price Comparison
+ID	Requirement	Priority
+FR-P1	System shall display branded vs. generic price side-by-side for each medicine in Indian Rupees (₹)	Must Have
+FR-P2	System shall calculate and display potential savings in absolute (₹) and percentage terms	Must Have
+FR-P3	Price data shall be sourced from the medicine dataset; data version date shall be displayed to the user	Must Have
+FR-P4	System shall display a total estimated savings figure for the complete prescription	Should Have
+
+5.7 AI Insights
+ID	Requirement	Priority
+FR-I1	For each identified medicine, system shall display a 2–3 sentence usage summary generated via LLM (Claude/OpenAI)	Should Have
+FR-I2	Every AI-generated insight shall include a disclaimer: “For informational purposes only. Consult a licensed pharmacist or physician.”	Must Have
+FR-I3	LLM prompts shall instruct the model to avoid dosage recommendations; output shall be validated against a blocklist of prohibited terms	Must Have
+FR-I4	AI insights shall be displayed in a collapsible section, off by default, to de-emphasize versus factual data	Should Have
+
+6. Non-Functional Requirements
+
+6.1 Performance
+•API response time (P95): < 5 seconds for OCR completion
+•OCR task queue: support up to 50 concurrent jobs without degradation
+•Frontend initial load: < 2 seconds on a 4G connection
+•Database queries: < 200ms at the 95th percentile
+
+6.2 Security
+•All data in transit encrypted via TLS 1.3
+•Prescription files encrypted at rest in object storage
+•JWT tokens signed with RS256; refresh token rotation enforced
+•Raw prescription images auto-deleted after 24 hours; extracted data retained for 90 days
+•Rate limiting: 20 uploads per user per day; 100 API requests per hour
+•OWASP Top 10 mitigations applied during development and reviewed pre-launch
+
+6.3 Privacy & Compliance
+•Prescriptions constitute Personal Health Information (PHI) under India’s DPDP Act 2023
+•Users must accept a Privacy Policy before first upload; policy must explain data retention and deletion
+•System shall not share user prescription data with third parties except for LLM inference (data minimization — medicine names only, not full prescription text)
+•Users shall have the ability to delete their account and all associated data
+
+6.4 Availability & Reliability
+•Target uptime: 99.5% (excluding scheduled maintenance)
+•Graceful degradation: if OCR service is down, display informative error without crashing the frontend
+•Background job retry: Celery tasks retry up to 3 times with exponential backoff
+
+6.5 Scalability
+•Backend containerized with Docker; horizontally scalable via Kubernetes or equivalent
+•Database connection pooling via SQLAlchemy (PostgreSQL)
+•Redis used for task brokering and response caching (TTL: 1 hour for price data)
+
+7. System Architecture
+
+7.1 Architecture Overview
+MediSage follows a layered microservice-inspired architecture with clear separation of concerns across Frontend, API Gateway, Processing, and Data layers.
+
+Layer	Components
+Frontend	React.js + Tailwind CSS | Drag-and-drop upload | Results dashboard
+API Gateway	FastAPI (Python) | JWT Auth Middleware | Rate Limiter | REST endpoints
+File Storage	AWS S3 / Cloudinary | Encrypted at rest | 24-hour auto-deletion lifecycle
+Task Queue	Celery Workers + Redis Broker | Async OCR processing | 3x retry with backoff
+OCR Engine	OpenCV preprocessing → Quality classifier → EasyOCR (handwritten) / Tesseract (printed)
+NLP Module	spaCy NER + Regex extraction | RapidFuzz matching | Medicine dictionary lookup
+AI Layer	LLM API (Claude / OpenAI) | Prompt guardrails | Output validation | Disclaimer injection
+Data Layer	PostgreSQL (structured data) | Redis Cache (price data TTL 1hr) | Medicine dataset (A–Z India)
+Fallback	OpenFDA API – invoked when medicine not found in primary dataset
+
+7.2 Data Flow
+The following sequence describes a complete prescription analysis request:
+
+#	Step
+1	User authenticates and uploads prescription file via the React frontend
+2	FastAPI validates file type/size; stores file in S3; returns a job_id to the client
+3	Celery worker picks up the job; OpenCV preprocesses the image
+4	Quality classifier selects EasyOCR or Tesseract; OCR runs; confidence scores computed
+5	spaCy NER + regex extract candidate medicine names; RapidFuzz matches against dictionary
+6	Dataset lookup maps branded medicines → generics; OpenFDA fallback invoked if needed
+7	Price comparison computed; potential savings calculated for each medicine and total
+8	LLM called for AI usage insights (medicine names only sent, not full prescription)
+9	Results stored in PostgreSQL; cached in Redis (1hr TTL); job status updated to complete
+10	Frontend polls job status; renders results dashboard with price table and AI insights
+
+8. Technology Stack
+
+Category	Technology	Rationale
+Frontend	React.js + Tailwind CSS	Component reusability; responsive by default
+Backend API	FastAPI (Python 3.11+)	Async support; auto-generated OpenAPI docs; high performance
+Auth	PyJWT + bcrypt + OAuth 2.0	Industry standard; secure token handling
+OCR	EasyOCR + Tesseract 5.x	Complementary strengths for handwritten vs. printed text
+Image Processing	OpenCV 4.x	Mature, performant preprocessing pipeline
+NLP	spaCy 3.x + RapidFuzz	Fast NER; fuzzy matching handles OCR noise well
+Task Queue	Celery + Redis (broker)	Proven async job processing; Redis doubles as cache
+Database	PostgreSQL 16	ACID compliance; relational integrity for user and result data
+File Storage	AWS S3 / Cloudinary	Durable; lifecycle policies for auto-deletion
+AI / LLM	Anthropic Claude API / OpenAI GPT-4o	High-quality medical summaries; prompt control
+Fallback API	OpenFDA API	Free, authoritative drug data from US FDA
+Containerisation	Docker + Docker Compose	Reproducible environments; easy deployment
+Hosting	Render / Railway (backend), Vercel (frontend)	Low-ops deployment; free tiers for MVP
+
+9. UI / UX Requirements
+
+9.1 Key Screens
+•Landing / Login page – clean hero with value proposition; email/password and Google login
+•Upload page – large drag-and-drop zone; file picker fallback; upload progress bar
+•Processing page – animated status indicator with step labels (Uploading → Extracting → Analyzing → Done)
+•Results dashboard – prescription thumbnail | medicine table with generics | price savings summary | AI insights accordion
+•History page – list of past analyses with date, # medicines identified, total savings
+•Account / Settings – profile management; data deletion option
+
+9.2 Design Principles
+•Mobile-first responsive design; minimum viewport: 320px wide
+•WCAG 2.1 Level AA accessibility compliance
+•Colour-coded savings indicators: green (> 50% savings), orange (20–50%), grey (< 20%)
+•AI-generated content visually distinct from factual data (different background, italic, disclaimer label)
+•Empty states and error states designed for all screens
+
+10. API Specification (Summary)
+
+Method	Endpoint	Description	Auth
+POST	/auth/register	Register new user	None
+POST	/auth/login	Login; returns JWT access + refresh tokens	None
+POST	/prescriptions/upload	Upload file; returns job_id	Bearer JWT
+GET	/prescriptions/status/{job_id}	Poll job status (pending/processing/complete/failed)	Bearer JWT
+GET	/prescriptions/{id}/results	Fetch full analysis results for a prescription	Bearer JWT
+GET	/prescriptions/history	List user’s past prescription analyses	Bearer JWT
+DELETE	/users/me	Delete account and all associated data	Bearer JWT
+GET	/health	Service health check	None
+
+11. Testing Strategy
+
+Test Type	Scope	Tools
+Unit Tests	NLP extraction logic, fuzzy matcher, price calculator, auth helpers	pytest, pytest-cov
+Integration Tests	FastAPI endpoints, Celery task chain, database operations	pytest + httpx, TestClient
+OCR Benchmark	200-sample labeled prescription dataset (printed + handwritten)	Custom eval script
+E2E Tests	Upload → results flow; auth flows; error states	Playwright
+Security Scan	OWASP ZAP scan; dependency audit	OWASP ZAP, pip-audit
+Load Test	50 concurrent upload + analysis jobs	Locust
+
+12. Risks & Mitigations
+
+Risk	Severity	Mitigation
+Low OCR accuracy on handwritten prescriptions	High	EasyOCR + preprocessing pipeline; confidence threshold with user flag; v2.0 deep learning model planned
+Medicine not found in dataset	Medium	OpenFDA fallback; graceful “Not found” UI state
+LLM hallucinating dangerous medical advice	High	Blocklist validation; prohibit dosage recommendations in prompt; mandatory disclaimer
+Price data staleness	Medium	Dataset version date displayed; quarterly refresh schedule; Redis TTL for cached prices
+PHI data breach	Critical	TLS 1.3 + at-rest encryption; 24-hour file deletion; minimal data sent to LLM; DPDP Act compliance
+Third-party API downtime (OpenFDA, LLM)	Low	Graceful degradation; feature-flagged AI insights; retry logic with circuit breaker
+
+13. Future Enhancements (v2.0+)
+
+Feature	Priority	Target Version
+Deep learning handwriting recognition (CRNN/TrOCR)	High	v2.0
+Real-time pharmacy inventory & price integration	High	v2.0
+Drug interaction warnings	High	v2.0
+Native mobile app (React Native)	Medium	v2.1
+Doctor recommendation system	Low	v3.0
+Multi-language prescription support (Tamil, Telugu, Hindi)	Medium	v2.1
+Pharmacy locator map integration	Low	v2.2
+
+14. Glossary
+
+Term	Definition
+OCR	Optical Character Recognition – technology that converts images of text into machine-readable text
+NER	Named Entity Recognition – NLP technique for identifying specific entities (e.g., medicine names) in text
+Fuzzy Matching	String similarity algorithm that matches approximate text, tolerating OCR noise and spelling variants
+PHI	Personal Health Information – any data related to an individual’s medical condition or treatment
+DPDP Act	Digital Personal Data Protection Act 2023 – India’s primary data privacy legislation
+LLM	Large Language Model – AI model trained on large text corpora (e.g., Claude, GPT-4o)
+JWT	JSON Web Token – compact, URL-safe token format used for authentication
+OpenFDA	Open API provided by the US FDA for publicly available drug database information
+TTL	Time-to-Live – cache expiration duration (used for Redis price data caching)
+
+
+End of Document – MediSage PRD v1.0
